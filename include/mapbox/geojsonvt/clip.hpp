@@ -10,10 +10,15 @@ template <uint8_t I>
 class clipper {
 public:
     clipper(double k1_, double k2_, bool lineMetrics_ = false)
-        : k1(k1_), k2(k2_), lineMetrics(lineMetrics_) {}
+        : k1(k1_), k2(k2_), k1_metric(k1_), k2_metric(k2_), lineMetrics(lineMetrics_) {}
+
+    clipper(double k1_geom, double k2_geom, double k1_m, double k2_m, bool lineMetrics_ = false)
+    : k1(k1_geom), k2(k2_geom), k1_metric(k1_m), k2_metric(k2_m), lineMetrics(lineMetrics_) {}
 
     const double k1;
     const double k2;
+    const double k1_metric;
+    const double k2_metric;
     const bool lineMetrics;
 
     vt_geometry operator()(const vt_empty& empty) const {
@@ -103,7 +108,8 @@ private:
         const size_t len = line.size();
         double lineLen = line.segStart;
         double segLen = 0.0;
-        double t = 0.0;
+        double t_geom = 0.0;
+        double t_metric = 0.0;
 
         if (len < 2)
             return;
@@ -117,69 +123,102 @@ private:
             const double bk = get<I>(b);
             const bool isLastSeg = (i == (len - 2));
 
-            if (lineMetrics) segLen = ::hypot((b.x - a.x), (b.y - a.y));
+            if (lineMetrics) {
+                segLen = ::hypot((b.x - a.x), (b.y - a.y));
+            }
 
             if (ak < k1) {
                 if (bk > k2) { // ---|-----|-->
-                    t = calc_progress<I>(a, b, k1);
-                    slice.emplace_back(intersect<I>(a, b, k1, t));
-                    if (lineMetrics) slice.segStart = lineLen + segLen * t;
+                    t_geom = calc_progress<I>(a, b, k1);
+                    slice.emplace_back(intersect<I>(a, b, k1, calc_progress<I>(a, b, k1)));
+                    if (lineMetrics) {
+                        t_metric =  calc_progress<I>(a, b, k1_metric);
+                        slice.segStart = lineLen + segLen * t_metric;
+                    }
 
-                    t = calc_progress<I>(a, b, k2);
-                    slice.emplace_back(intersect<I>(a, b, k2, t));
-                    if (lineMetrics) slice.segEnd = lineLen + segLen * t;
+                    t_geom = calc_progress<I>(a, b, k2);
+                    slice.emplace_back(intersect<I>(a, b, k2, t_geom));
+                    if (lineMetrics) {
+                        t_metric = calc_progress<I>(a, b, k2_metric);
+                        slice.segEnd = lineLen + segLen * t_metric;
+                    }
                     slices.emplace_back(std::move(slice));
 
                     slice = newSlice(line);
 
                 } else if (bk > k1) { // ---|-->  |
-                    t = calc_progress<I>(a, b, k1);
-                    slice.emplace_back(intersect<I>(a, b, k1, t));
-                    if (lineMetrics) slice.segStart = lineLen + segLen * t;
+                    t_geom = calc_progress<I>(a, b, k1);
+                    slice.emplace_back(intersect<I>(a, b, k1, t_geom));
+                    if (lineMetrics) {
+                        t_metric = calc_progress<I>(a, b, k1_metric);
+                        slice.segStart = lineLen + segLen * t_metric;
+                    }
                     if (isLastSeg) slice.emplace_back(b); // last point
 
                 } else if (bk == k1 && !isLastSeg) { // --->|..  |
-                    if (lineMetrics) slice.segStart = lineLen + segLen;
+                    if (lineMetrics) {
+                        slice.segStart = lineLen + segLen;
+                    }
                     slice.emplace_back(b);
                 }
             } else if (ak > k2) {
                 if (bk < k1) { // <--|-----|---
-                    t = calc_progress<I>(a, b, k2);
-                    slice.emplace_back(intersect<I>(a, b, k2, t));
-                    if (lineMetrics) slice.segStart = lineLen + segLen * t;
+                    t_geom = calc_progress<I>(a, b, k2);
+                    slice.emplace_back(intersect<I>(a, b, k2, t_geom));
+                    if (lineMetrics) {
+                        t_metric = calc_progress<I>(a, b, k2_metric);
+                        slice.segStart = lineLen + segLen * t_metric;
+                    }
 
-                    t = calc_progress<I>(a, b, k1);
-                    slice.emplace_back(intersect<I>(a, b, k1, t));
-                    if (lineMetrics) slice.segEnd = lineLen + segLen * t;
+                    t_geom = calc_progress<I>(a, b, k1);
+                    slice.emplace_back(intersect<I>(a, b, k1, t_geom));
+                    if (lineMetrics) {
+                        t_metric = calc_progress<I>(a, b, k1_metric);
+                        slice.segEnd = lineLen + segLen * t_metric;
+                    }
 
                     slices.emplace_back(std::move(slice));
 
                     slice = newSlice(line);
 
                 } else if (bk < k2) { // |  <--|---
-                    t = calc_progress<I>(a, b, k2);
-                    slice.emplace_back(intersect<I>(a, b, k2, t));
-                    if (lineMetrics) slice.segStart = lineLen + segLen * t;
+                    t_geom = calc_progress<I>(a, b, k2);
+                    slice.emplace_back(intersect<I>(a, b, k2, t_geom));
+                    if (lineMetrics) {
+                        t_metric = calc_progress<I>(a, b, k2_metric);
+                        slice.segStart = lineLen + segLen * t_metric;
+                    }
                     if (isLastSeg) slice.emplace_back(b); // last point
 
                 } else if (bk == k2 && !isLastSeg) { // |  ..|<---
-                    if (lineMetrics) slice.segStart = lineLen + segLen;
+                    if (lineMetrics) {
+                        slice.segStart = lineLen + segLen;
+                    }
                     slice.emplace_back(b);
                 }
             } else {
+                if (slice.empty() && lineMetrics) {
+                    slice.segStart = lineLen;
+                }
                 slice.emplace_back(a);
 
                 if (bk < k1) { // <--|---  |
-                    t = calc_progress<I>(a, b, k1);
-                    slice.emplace_back(intersect<I>(a, b, k1, t));
-                    if (lineMetrics) slice.segEnd = lineLen + segLen * t;
+                    t_geom = calc_progress<I>(a, b, k1);
+                    slice.emplace_back(intersect<I>(a, b, k1, t_geom));
+                    if (lineMetrics) {
+                        t_metric = calc_progress<I>(a, b, k1_metric);
+                        slice.segEnd = lineLen + segLen * t_metric;
+                    }
                     slices.emplace_back(std::move(slice));
                     slice = newSlice(line);
 
                 } else if (bk > k2) { // |  ---|-->
-                    t = calc_progress<I>(a, b, k2);
-                    slice.emplace_back(intersect<I>(a, b, k2, t));
-                    if (lineMetrics) slice.segEnd = lineLen + segLen * t;
+                    t_geom = calc_progress<I>(a, b, k2);
+                    slice.emplace_back(intersect<I>(a, b, k2, t_geom));
+                    if (lineMetrics) {
+                        t_metric = calc_progress<I>(a, b, k2_metric);
+                        slice.segEnd = lineLen + segLen * t_metric;
+                    }
                     slices.emplace_back(std::move(slice));
                     slice = newSlice(line);
 
@@ -261,60 +300,75 @@ private:
  *     |        |
  */
 
-template <uint8_t I>
-inline vt_features clip(const vt_features& features,
-                        const double k1,
-                        const double k2,
-                        const double minAll,
-                        const double maxAll,
-                        const bool lineMetrics) {
+    template <uint8_t I>
+    inline vt_features clip(const vt_features& features,
+                            const double k1_geom,
+                            const double k2_geom,
+                            const double k1_metric,
+                            const double k2_metric,
+                            const double minAll,
+                            const double maxAll,
+                            const bool lineMetrics) {
+        // Trivial accept for the entire feature set is only safe if lineMetrics are disabled.
+        if (/*!lineMetrics &&*/ minAll >= k1_geom && maxAll < k2_geom)
+            return features;
 
-    if (minAll >= k1 && maxAll < k2) // trivial accept
-        return features;
+        if (maxAll < k1_geom || minAll >= k2_geom)
+            return {};
 
-    if (maxAll < k1 || minAll >= k2) // trivial reject
-        return {};
+        vt_features clipped;
+        clipped.reserve(features.size());
 
-    vt_features clipped;
-    clipped.reserve(features.size());
+        for (const auto& feature : features) {
+            const auto& geom = feature.geometry;
+            assert(feature.properties);
+            const auto& props = feature.properties;
+            const auto& id = feature.id;
 
-    for (const auto& feature : features) {
-        const auto& geom = feature.geometry;
-        assert(feature.properties);
-        const auto& props = feature.properties;
-        const auto& id = feature.id;
+            const double min = get<I>(feature.bbox.min);
+            const double max = get<I>(feature.bbox.max);
 
-        const double min = get<I>(feature.bbox.min);
-        const double max = get<I>(feature.bbox.max);
+            // Trivial accept for a single feature is also only safe if lineMetrics are disabled.
+            if (/*!lineMetrics &&*/ min >= k1_geom && max < k2_geom) {
+                clipped.emplace_back(feature);
 
-        if (min >= k1 && max < k2) { // trivial accept
-            clipped.emplace_back(feature);
+            } else if (max < k1_geom || min >= k2_geom) { // Trivial reject is always safe.
+                continue;
 
-        } else if (max < k1 || min >= k2) { // trivial reject
-            continue;
+            } else { // Perform a detailed clip.
+                const auto& clippedGeom = vt_geometry::visit(geom, clipper<I>{ k1_geom, k2_geom, k1_metric, k2_metric, lineMetrics });
 
-        } else {
-            const auto& clippedGeom = vt_geometry::visit(geom, clipper<I>{ k1, k2, lineMetrics });
-
-            clippedGeom.match(
-                [&](const auto&) {
-                    clipped.emplace_back(clippedGeom, props, id);
-                },
-                [&](const vt_multi_line_string& result) {
-                    if (lineMetrics) {
-                        for (const auto& segment : result) {
-                            clipped.emplace_back(segment, props, id);
-                        }
-                    } else {
+                clippedGeom.match(
+                    [&](const auto&) {
                         clipped.emplace_back(clippedGeom, props, id);
+                    },
+                    [&](const vt_multi_line_string& result) {
+                        if (lineMetrics) {
+                            for (const auto& segment : result) {
+                                clipped.emplace_back(segment, props, id);
+                            }
+                        } else {
+                            clipped.emplace_back(clippedGeom, props, id);
+                        }
                     }
-                }
-            );
+                );
+            }
         }
+        return clipped;
     }
 
-    return clipped;
-}
+
+    // Existing clip function (now calls the new one for backward compatibility)
+    template <uint8_t I>
+    inline vt_features clip(const vt_features& features,
+                            const double k1,
+                            const double k2,
+                            const double minAll,
+                            const double maxAll,
+                            const bool lineMetrics) {
+        // Pass 'k1' and 'k2' as both the geometry and metric boundaries
+        return clip<I>(features, k1, k2, k1, k2, minAll, maxAll, lineMetrics);
+    }
 
 } // namespace detail
 } // namespace geojsonvt

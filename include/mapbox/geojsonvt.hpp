@@ -1,4 +1,3 @@
-#pragma once
 
 #include <mapbox/geojsonvt/convert.hpp>
 #include <mapbox/geojsonvt/tile.hpp>
@@ -57,7 +56,7 @@ struct Options : TileOptions {
     // max number of points per tile in the tile index
     uint32_t indexMaxPoints = 100000;
 
-    // whether to generate feature ids, overriding existing ids  
+    // whether to generate feature ids, overriding existing ids
     bool generateId = false;
 };
 
@@ -234,24 +233,37 @@ private:
             }
         }
 
-        const double p = 0.5 * options.buffer / options.extent;
+        // const double p = 0.5 * options.buffer / options.extent;
+        const double p_geom = options.lineMetrics ? 0.0 : (0.5 * options.buffer / options.extent);
         const auto& min = tile.bbox.min;
         const auto& max = tile.bbox.max;
 
-        const auto left = detail::clip<0>(features, (x - p) / z2, (x + 0.5 + p) / z2, min.x, max.x, options.lineMetrics);
+        const auto left = detail::clip<0>(features, (x - p_geom) / z2, (x + 0.5 + p_geom) / z2, //geometry boundaries
+            x /z2 , (x + 0.5) / z2, //metric boundaries for line string
+            min.x, max.x, options.lineMetrics);
 
-        splitTile(detail::clip<1>(left, (y - p) / z2, (y + 0.5 + p) / z2, min.y, max.y, options.lineMetrics), z + 1,
-                  x * 2, y * 2, cz, cx, cy);
-        splitTile(detail::clip<1>(left, (y + 0.5 - p) / z2, (y + 1 + p) / z2, min.y, max.y, options.lineMetrics), z + 1,
-                  x * 2, y * 2 + 1, cz, cx, cy);
+        splitTile(detail::clip<1>(left, (y - p_geom) / z2, (y + 0.5 + p_geom) / z2, //geometry boundaries
+        y / z2, (y + 0.5) / z2, //metric boundaries for line string
+            min.y, max.y, options.lineMetrics),
+            z + 1, x * 2, y * 2, cz, cx, cy);
+        splitTile(detail::clip<1>(left, (y + 0.5 - p_geom) / z2, (y + 1 + p_geom) / z2,
+            (y + 0.5) / z2, (y + 1) / z2,
+            min.y, max.y, options.lineMetrics),
+            z + 1, x * 2, y * 2 + 1, cz, cx, cy);
 
         const auto right =
-            detail::clip<0>(features, (x + 0.5 - p) / z2, (x + 1 + p) / z2, min.x, max.x, options.lineMetrics);
+            detail::clip<0>(features, (x + 0.5 - p_geom) / z2, (x + 1 + p_geom) / z2,
+            (x + 0.5) / z2, (x + 1) / z2,
+                min.x, max.x, options.lineMetrics);
 
-        splitTile(detail::clip<1>(right, (y - p) / z2, (y + 0.5 + p) / z2, min.y, max.y, options.lineMetrics), z + 1,
-                  x * 2 + 1, y * 2, cz, cx, cy);
-        splitTile(detail::clip<1>(right, (y + 0.5 - p) / z2, (y + 1 + p) / z2, min.y, max.y, options.lineMetrics), z + 1,
-                  x * 2 + 1, y * 2 + 1, cz, cx, cy);
+        splitTile(detail::clip<1>(right, (y - p_geom) / z2, (y + 0.5 + p_geom) / z2,
+        y / z2, (y + 0.5) / z2,
+            min.y, max.y, options.lineMetrics),
+            z + 1, x * 2 + 1, y * 2, cz, cx, cy);
+        splitTile(detail::clip<1>(right, (y + 0.5 - p_geom) / z2, (y + 1 + p_geom) / z2,
+            (y + 0.5) / z2, (y + 1) / z2,
+            min.y, max.y, options.lineMetrics),
+            z + 1,x * 2 + 1, y * 2 + 1, cz, cx, cy);
 
         // if we sliced further down, no need to keep source geometry
         tile.source_features = {};
