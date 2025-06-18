@@ -58,6 +58,8 @@ struct Options : TileOptions {
 
     // whether to generate feature ids, overriding existing ids
     bool generateId = false;
+
+    bool disableBufferForLineMetrics = false;
 };
 
 const Tile empty_tile{};
@@ -233,11 +235,9 @@ private:
             }
         }
 
-        // const double p = 0.5 * options.buffer / options.extent;
-        const double p_geom = options.lineMetrics ? 0.0 : (0.5 * options.buffer / options.extent);
+        const double p_geom = options.disableBufferForLineMetrics? 0.0 : (0.5 * options.buffer / options.extent);
         const auto& min = tile.bbox.min;
         const auto& max = tile.bbox.max;
-
         const auto left = detail::clip<0>(features, (x - p_geom) / z2, (x + 0.5 + p_geom) / z2, //geometry boundaries
             x /z2 , (x + 0.5) / z2, //metric boundaries for line string
             min.x, max.x, options.lineMetrics);

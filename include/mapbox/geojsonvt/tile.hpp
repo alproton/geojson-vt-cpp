@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <mapbox/geojsonvt/types.hpp>
 
 namespace mapbox {
@@ -86,8 +87,10 @@ private:
         if (!new_line.empty()) {
             if (lineMetrics) {
                 property_map newProps = props;
-                newProps.emplace(std::make_pair<std::string, value>("mapbox_clip_start", line.segStart / line.dist));
-                newProps.emplace(std::make_pair<std::string, value>("mapbox_clip_end", line.segEnd / line.dist));
+                double clip_start = line.segStart / line.dist;
+                double clip_end = line.segEnd / line.dist;
+                newProps.emplace(std::make_pair<std::string, value>("mapbox_clip_start",clip_start));
+                newProps.emplace(std::make_pair<std::string, value>("mapbox_clip_end", clip_end));
                 tile.features.emplace_back(std::move(new_line), std::move(newProps), id);
             } else
                 tile.features.emplace_back(std::move(new_line), props, id);
