@@ -116,10 +116,6 @@ private:
         double t_geom = 0.0;
         double t_metric = 0.0;
 
-        std::cout<<"tileID: "<<z_<<" "<<x_<<" "<<y_ <<std::endl;
-        if(z_ == 18 && x_ == 42278 && y_ == 10562) {
-            std::cout<<"break here"<<std::endl;
-        }
 
         if (len < 2)
             return;
