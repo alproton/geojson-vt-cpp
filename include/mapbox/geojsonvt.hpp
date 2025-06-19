@@ -240,29 +240,27 @@ private:
         const auto& max = tile.bbox.max;
         const auto left = detail::clip<0>(features, (x - p_geom) / z2, (x + 0.5 + p_geom) / z2, //geometry boundaries
             x /z2 , (x + 0.5) / z2, //metric boundaries for line string
-            min.x, max.x, options.lineMetrics);
+            min.x, max.x, z, x, y, options.lineMetrics);
 
         splitTile(detail::clip<1>(left, (y - p_geom) / z2, (y + 0.5 + p_geom) / z2, //geometry boundaries
         y / z2, (y + 0.5) / z2, //metric boundaries for line string
-            min.y, max.y, options.lineMetrics),
+            min.y, max.y, z, x, y, options.lineMetrics),
             z + 1, x * 2, y * 2, cz, cx, cy);
         splitTile(detail::clip<1>(left, (y + 0.5 - p_geom) / z2, (y + 1 + p_geom) / z2,
-            (y + 0.5) / z2, (y + 1) / z2,
-            min.y, max.y, options.lineMetrics),
+            (y + 0.5) / z2, (y + 1) / z2, min.y, max.y, z, x, y, options.lineMetrics),
             z + 1, x * 2, y * 2 + 1, cz, cx, cy);
 
         const auto right =
             detail::clip<0>(features, (x + 0.5 - p_geom) / z2, (x + 1 + p_geom) / z2,
-            (x + 0.5) / z2, (x + 1) / z2,
-                min.x, max.x, options.lineMetrics);
+            (x + 0.5) / z2, (x + 1) / z2, min.x, max.x, z, x, y, options.lineMetrics);
 
         splitTile(detail::clip<1>(right, (y - p_geom) / z2, (y + 0.5 + p_geom) / z2,
-        y / z2, (y + 0.5) / z2,
-            min.y, max.y, options.lineMetrics),
-            z + 1, x * 2 + 1, y * 2, cz, cx, cy);
+        y / z2, (y + 0.5) / z2, min.y, max.y, z, x, y, options.lineMetrics),
+        z + 1, x * 2 + 1, y * 2, cz, cx, cy);
+
         splitTile(detail::clip<1>(right, (y + 0.5 - p_geom) / z2, (y + 1 + p_geom) / z2,
             (y + 0.5) / z2, (y + 1) / z2,
-            min.y, max.y, options.lineMetrics),
+            min.y, max.y, z, x, y, options.lineMetrics),
             z + 1,x * 2 + 1, y * 2 + 1, cz, cx, cy);
 
         // if we sliced further down, no need to keep source geometry

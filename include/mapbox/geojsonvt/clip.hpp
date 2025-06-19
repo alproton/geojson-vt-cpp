@@ -10,16 +10,21 @@ template <uint8_t I>
 class clipper {
 public:
     clipper(double k1_, double k2_, bool lineMetrics_ = false)
-        : k1(k1_), k2(k2_), k1_metric(k1_), k2_metric(k2_), lineMetrics(lineMetrics_) {}
+        : k1(k1_), k2(k2_), k1_metric(k1_), k2_metric(k2_), lineMetrics(lineMetrics_), z_(0), x_(0), y_(0) {}
 
     clipper(double k1_geom, double k2_geom, double k1_m, double k2_m, bool lineMetrics_ = false)
-    : k1(k1_geom), k2(k2_geom), k1_metric(k1_m), k2_metric(k2_m), lineMetrics(lineMetrics_) {}
+    : k1(k1_geom), k2(k2_geom), k1_metric(k1_m), k2_metric(k2_m), lineMetrics(lineMetrics_), z_(0), x_(0), y_(0) {}
+
+    clipper(double k1_geom, double k2_geom, double k1_m, double k2_m, uint8_t z, uint32_t x, uint32_t y, bool lineMetrics_ = false)
+    : k1(k1_geom), k2(k2_geom), k1_metric(k1_m), k2_metric(k2_m), lineMetrics(lineMetrics_), z_(z), x_(x), y_(y) {}
 
     const double k1;
     const double k2;
     const double k1_metric;
     const double k2_metric;
     const bool lineMetrics;
+    const uint8_t z_;
+    uint32_t x_, y_;
 
     vt_geometry operator()(const vt_empty& empty) const {
         return empty;
@@ -110,6 +115,11 @@ private:
         double segLen = 0.0;
         double t_geom = 0.0;
         double t_metric = 0.0;
+
+        std::cout<<"tileID: "<<z_<<" "<<x_<<" "<<y_ <<std::endl;
+        if(z_ == 18 && x_ == 42278 && y_ == 10562) {
+            std::cout<<"break here"<<std::endl;
+        }
 
         if (len < 2)
             return;
@@ -308,7 +318,10 @@ private:
                             const double k2_metric,
                             const double minAll,
                             const double maxAll,
-                            const bool lineMetrics) {
+                            const bool lineMetrics,
+                            const uint8_t z,
+                            const uint32_t x,
+                            const uint32_t y) {
         // Trivial accept for the entire feature set is only safe if lineMetrics are disabled.
         if (/*!lineMetrics &&*/ minAll >= k1_geom && maxAll < k2_geom)
             return features;
@@ -336,7 +349,7 @@ private:
                 continue;
 
             } else { // Perform a detailed clip.
-                const auto& clippedGeom = vt_geometry::visit(geom, clipper<I>{ k1_geom, k2_geom, k1_metric, k2_metric, lineMetrics });
+                const auto& clippedGeom = vt_geometry::visit(geom, clipper<I>{ k1_geom, k2_geom, k1_metric, k2_metric, z, x, y, lineMetrics });
 
                 clippedGeom.match(
                     [&](const auto&) {
@@ -367,7 +380,7 @@ private:
                             const double maxAll,
                             const bool lineMetrics) {
         // Pass 'k1' and 'k2' as both the geometry and metric boundaries
-        return clip<I>(features, k1, k2, k1, k2, minAll, maxAll, lineMetrics);
+        return clip<I>(features, k1, k2, k1, k2, minAll, maxAll, lineMetrics, 0, 0, 0);
     }
 
 } // namespace detail
