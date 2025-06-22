@@ -1,3 +1,4 @@
+#pragma once
 
 #include <mapbox/geojsonvt/convert.hpp>
 #include <mapbox/geojsonvt/tile.hpp>
@@ -195,7 +196,7 @@ private:
 
             it = tiles
                      .emplace(id,
-                              detail::InternalTile{ features, z, x, y, options.extent, tolerance, options.lineMetrics })
+                              detail::InternalTile{ features, z, x, y, options.extent, tolerance, options.lineMetrics, options.disableBufferForLineMetrics })
                      .first;
             stats[z] = (stats.count(z) ? stats[z] + 1 : 1);
             total++;
@@ -204,24 +205,32 @@ private:
 
         auto& tile = it->second;
 
-        if (features.empty())
+        if (features.empty()) {
+            std::cout<<"feartures is empty"<<std::endl;
             return;
+        }
+
 
         // if it's the first-pass tiling
         if (cz == 0u) {
             // stop tiling if we reached max zoom, or if the tile is too simple
             if (z == options.indexMaxZoom || tile.tile.num_points <= options.indexMaxPoints) {
                 tile.source_features = features;
+                std::cout<<"cz == 0, stop tiling if we reached max zoom, or if the tile is too simple"<<std::endl;
                 return;
             }
 
         } else { // drilldown to a specific tile;
             // stop tiling if we reached base zoom
-            if (z == options.maxZoom)
+            if (z == options.maxZoom) {
+                std::cout<<"stopy tiling if we reached max zoom"<<std::endl;
                 return;
+            }
+
 
             // stop tiling if it's our target tile zoom
             if (z == cz) {
+                std::cout<<"stop tiling if it's our target tile zoom"<<std::endl;
                 tile.source_features = features;
                 return;
             }
@@ -231,37 +240,54 @@ private:
             if (x != static_cast<uint32_t>(std::floor(cx / m)) ||
                 y != static_cast<uint32_t>(std::floor(cy / m))) {
                 tile.source_features = features;
+                std::cout<<"stop tiling if it's not an ancestor of the target tile"<<std::endl;
                 return;
             }
         }
 
-        const double p_geom = options.disableBufferForLineMetrics? 0.0 : (0.5 * options.buffer / options.extent);
+        // if(z == 6 && x == 10 && y == 24) {
+        //     std::cout<<"break here"<<std::endl;
+        // }
+        // if(z == 5 && x == 5 && y == 12) {
+        //     std::cout<<"break here"<<std::endl;
+        // }
+
+        const double p_geom = (0.5 * options.buffer / options.extent);
         const auto& min = tile.bbox.min;
         const auto& max = tile.bbox.max;
-        const auto left = detail::clip<0>(features, (x - p_geom) / z2, (x + 0.5 + p_geom) / z2, //geometry boundaries
-            x /z2 , (x + 0.5) / z2, //metric boundaries for line string
-            min.x, max.x, z, x, y, options.lineMetrics);
+        const auto left = detail::clip<0>(features,
+            (x - p_geom) / z2, (x + 0.5 + p_geom) / z2, //geometry boundaries
+            x /z2 , (x + 0.5) / z2, //metric boundaries
+            min.x, max.x, options.disableBufferForLineMetrics, options.lineMetrics, z, x, y);
 
-        splitTile(detail::clip<1>(left, (y - p_geom) / z2, (y + 0.5 + p_geom) / z2, //geometry boundaries
-        y / z2, (y + 0.5) / z2, //metric boundaries for line string
-            min.y, max.y, z, x, y, options.lineMetrics),
-            z + 1, x * 2, y * 2, cz, cx, cy);
-        splitTile(detail::clip<1>(left, (y + 0.5 - p_geom) / z2, (y + 1 + p_geom) / z2,
-            (y + 0.5) / z2, (y + 1) / z2, min.y, max.y, z, x, y, options.lineMetrics),
-            z + 1, x * 2, y * 2 + 1, cz, cx, cy);
+        splitTile(detail::clip<1>(left,
+            (y - p_geom) / z2, (y + 0.5 + p_geom) / z2, //geometry boundaries
+            y / z2, (y + 0.5) / z2, //metric boundaries
+            min.y, max.y, options.disableBufferForLineMetrics, options.lineMetrics, z, x, y),
+                z + 1, x * 2, y * 2, cz, cx, cy);
+        splitTile(detail::clip<1>(left, //geometry boundaries
+            (y + 0.5 - p_geom) / z2, (y + 1 + p_geom) / z2, //metric boundaries
+            (y + 0.5) / z2, (y + 1) / z2,
+            min.y, max.y, options.disableBufferForLineMetrics, options.lineMetrics, z, x, y),
+                z + 1, x * 2, y * 2 + 1, cz, cx, cy);
 
         const auto right =
-            detail::clip<0>(features, (x + 0.5 - p_geom) / z2, (x + 1 + p_geom) / z2,
-            (x + 0.5) / z2, (x + 1) / z2, min.x, max.x, z, x, y, options.lineMetrics);
+            detail::clip<0>(features,
+                (x + 0.5 - p_geom) / z2, (x + 1 + p_geom) / z2, //geometry boundaries
+                (x + 0.5) / z2, (x + 1) / z2, //metric boundaries
+                min.x, max.x, options.disableBufferForLineMetrics, options.lineMetrics, z, x, y);
 
-        splitTile(detail::clip<1>(right, (y - p_geom) / z2, (y + 0.5 + p_geom) / z2,
-        y / z2, (y + 0.5) / z2, min.y, max.y, z, x, y, options.lineMetrics),
-        z + 1, x * 2 + 1, y * 2, cz, cx, cy);
+        splitTile(detail::clip<1>(right,
+            (y - p_geom) / z2, (y + 0.5 + p_geom) / z2, //geometry boundaries
+            y / z2, (y + 0.5) / z2, //metric boundaries
+            min.y, max.y, options.disableBufferForLineMetrics, options.lineMetrics, z, x, y),
+                 z + 1, x * 2 + 1, y * 2, cz, cx, cy);
 
-        splitTile(detail::clip<1>(right, (y + 0.5 - p_geom) / z2, (y + 1 + p_geom) / z2,
-            (y + 0.5) / z2, (y + 1) / z2,
-            min.y, max.y, z, x, y, options.lineMetrics),
-            z + 1,x * 2 + 1, y * 2 + 1, cz, cx, cy);
+        splitTile(detail::clip<1>(right,
+            (y + 0.5 - p_geom) / z2, (y + 1 + p_geom) / z2, //geometry boundaries
+            (y + 0.5) / z2, (y + 1) / z2, //metric boundaries
+            min.y, max.y, options.disableBufferForLineMetrics, options.lineMetrics, z, x, y),
+                z + 1,x * 2 + 1, y * 2 + 1, cz, cx, cy);
 
         // if we sliced further down, no need to keep source geometry
         tile.source_features = {};
