@@ -52,6 +52,11 @@ struct project {
         result.segStart = 0;
         result.segEnd = result.dist;
 
+        //set values for line metrics without buffer as well as its important when we launch first
+        //time and are zoomed out to tile 0, 0, 0
+        result.segStartNoBuffer = 0;
+        result.segEndNoBuffer = result.dist;
+
         return result;
     }
 

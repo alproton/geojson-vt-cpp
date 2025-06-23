@@ -206,7 +206,7 @@ private:
         auto& tile = it->second;
 
         if (features.empty()) {
-            std::cout<<"feartures is empty"<<std::endl;
+            // std::cout<<"feartures is empty"<<std::endl;
             return;
         }
 
@@ -216,21 +216,21 @@ private:
             // stop tiling if we reached max zoom, or if the tile is too simple
             if (z == options.indexMaxZoom || tile.tile.num_points <= options.indexMaxPoints) {
                 tile.source_features = features;
-                std::cout<<"cz == 0, stop tiling if we reached max zoom, or if the tile is too simple"<<std::endl;
+                // std::cout<<"cz == 0, stop tiling if we reached max zoom, or if the tile is too simple"<<std::endl;
                 return;
             }
 
         } else { // drilldown to a specific tile;
             // stop tiling if we reached base zoom
             if (z == options.maxZoom) {
-                std::cout<<"stopy tiling if we reached max zoom"<<std::endl;
+                // std::cout<<"stopy tiling if we reached max zoom"<<std::endl;
                 return;
             }
 
 
             // stop tiling if it's our target tile zoom
             if (z == cz) {
-                std::cout<<"stop tiling if it's our target tile zoom"<<std::endl;
+                // std::cout<<"stop tiling if it's our target tile zoom"<<std::endl;
                 tile.source_features = features;
                 return;
             }
@@ -240,7 +240,7 @@ private:
             if (x != static_cast<uint32_t>(std::floor(cx / m)) ||
                 y != static_cast<uint32_t>(std::floor(cy / m))) {
                 tile.source_features = features;
-                std::cout<<"stop tiling if it's not an ancestor of the target tile"<<std::endl;
+                // std::cout<<"stop tiling if it's not an ancestor of the target tile"<<std::endl;
                 return;
             }
         }
@@ -251,7 +251,8 @@ private:
         // if(z == 5 && x == 5 && y == 12) {
         //     std::cout<<"break here"<<std::endl;
         // }
-
+        std::cout<<"drilling down tile: "<<std::to_string(z)<<" "<<x<<" "<<y<<std::endl;
+        // const double p_geom = options.disableBufferForLineMetrics ? 0.0 : (0.5 * options.buffer / options.extent);
         const double p_geom = (0.5 * options.buffer / options.extent);
         const auto& min = tile.bbox.min;
         const auto& max = tile.bbox.max;
@@ -265,9 +266,9 @@ private:
             y / z2, (y + 0.5) / z2, //metric boundaries
             min.y, max.y, options.disableBufferForLineMetrics, options.lineMetrics, z, x, y),
                 z + 1, x * 2, y * 2, cz, cx, cy);
-        splitTile(detail::clip<1>(left, //geometry boundaries
-            (y + 0.5 - p_geom) / z2, (y + 1 + p_geom) / z2, //metric boundaries
-            (y + 0.5) / z2, (y + 1) / z2,
+        splitTile(detail::clip<1>(left,
+            (y + 0.5 - p_geom) / z2, (y + 1 + p_geom) / z2, //geometry boundaries
+            (y + 0.5) / z2, (y + 1) / z2, //metric boundaries
             min.y, max.y, options.disableBufferForLineMetrics, options.lineMetrics, z, x, y),
                 z + 1, x * 2, y * 2 + 1, cz, cx, cy);
 
