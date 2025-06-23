@@ -193,7 +193,9 @@ private:
         if (it == tiles.end()) {
             const double tolerance =
                 (z == options.maxZoom ? 0 : options.tolerance / (z2 * options.extent));
-
+            if(z == 18 && x == 42278 && y == 101563) {
+                std::cout<<"break here"<<std::endl;
+            }
             it = tiles
                      .emplace(id,
                               detail::InternalTile{ features, z, x, y, options.extent, tolerance, options.lineMetrics, options.disableBufferForLineMetrics })
@@ -245,12 +247,6 @@ private:
             }
         }
 
-        // if(z == 6 && x == 10 && y == 24) {
-        //     std::cout<<"break here"<<std::endl;
-        // }
-        // if(z == 5 && x == 5 && y == 12) {
-        //     std::cout<<"break here"<<std::endl;
-        // }
         std::cout<<"drilling down tile: "<<std::to_string(z)<<" "<<x<<" "<<y<<std::endl;
         // const double p_geom = options.disableBufferForLineMetrics ? 0.0 : (0.5 * options.buffer / options.extent);
         const double p_geom = (0.5 * options.buffer / options.extent);
@@ -259,35 +255,39 @@ private:
         const auto left = detail::clip<0>(features,
             (x - p_geom) / z2, (x + 0.5 + p_geom) / z2, //geometry boundaries
             x /z2 , (x + 0.5) / z2, //metric boundaries
-            min.x, max.x, options.disableBufferForLineMetrics, options.lineMetrics, z, x, y);
+            min.x, max.x, options.disableBufferForLineMetrics, options.lineMetrics, detail::cqLeft, z, x, y);
 
         splitTile(detail::clip<1>(left,
             (y - p_geom) / z2, (y + 0.5 + p_geom) / z2, //geometry boundaries
             y / z2, (y + 0.5) / z2, //metric boundaries
-            min.y, max.y, options.disableBufferForLineMetrics, options.lineMetrics, z, x, y),
+            min.y, max.y, options.disableBufferForLineMetrics, options.lineMetrics, detail::cqLeftTop, z, x, y),
                 z + 1, x * 2, y * 2, cz, cx, cy);
+
+        if(z == 17 && x == 21139 && y == 50781) {
+            std::cout<<"break here"<<std::endl;
+        }
         splitTile(detail::clip<1>(left,
             (y + 0.5 - p_geom) / z2, (y + 1 + p_geom) / z2, //geometry boundaries
             (y + 0.5) / z2, (y + 1) / z2, //metric boundaries
-            min.y, max.y, options.disableBufferForLineMetrics, options.lineMetrics, z, x, y),
+            min.y, max.y, options.disableBufferForLineMetrics, options.lineMetrics, detail::cqLeftBottom, z, x, y),
                 z + 1, x * 2, y * 2 + 1, cz, cx, cy);
 
         const auto right =
             detail::clip<0>(features,
                 (x + 0.5 - p_geom) / z2, (x + 1 + p_geom) / z2, //geometry boundaries
                 (x + 0.5) / z2, (x + 1) / z2, //metric boundaries
-                min.x, max.x, options.disableBufferForLineMetrics, options.lineMetrics, z, x, y);
+                min.x, max.x, options.disableBufferForLineMetrics, options.lineMetrics, detail::cqRight, z, x, y);
 
         splitTile(detail::clip<1>(right,
             (y - p_geom) / z2, (y + 0.5 + p_geom) / z2, //geometry boundaries
             y / z2, (y + 0.5) / z2, //metric boundaries
-            min.y, max.y, options.disableBufferForLineMetrics, options.lineMetrics, z, x, y),
+            min.y, max.y, options.disableBufferForLineMetrics, options.lineMetrics, detail::cqRightTop, z, x, y),
                  z + 1, x * 2 + 1, y * 2, cz, cx, cy);
 
         splitTile(detail::clip<1>(right,
             (y + 0.5 - p_geom) / z2, (y + 1 + p_geom) / z2, //geometry boundaries
             (y + 0.5) / z2, (y + 1) / z2, //metric boundaries
-            min.y, max.y, options.disableBufferForLineMetrics, options.lineMetrics, z, x, y),
+            min.y, max.y, options.disableBufferForLineMetrics, options.lineMetrics, detail::cqRightBototm, z, x, y),
                 z + 1,x * 2 + 1, y * 2 + 1, cz, cx, cy);
 
         // if we sliced further down, no need to keep source geometry

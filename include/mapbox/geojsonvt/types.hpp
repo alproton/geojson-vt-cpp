@@ -86,8 +86,6 @@ struct vt_line_string : std::vector<vt_point> {
     double segEnd = 0.0; // segStart and segEnd are distance along a line in tile units, when lineMetrics = true
     double segStartNoBuffer = 0.0;
     double segEndNoBuffer = 0.0; // segStart and segEnd are distance along a line in tile units, when disableBufferForLineMetrics = true
-    bool tempLineOriginates = false;
-    bool tempLineEnded = false;
 };
 
 struct vt_linear_ring : std::vector<vt_point> {

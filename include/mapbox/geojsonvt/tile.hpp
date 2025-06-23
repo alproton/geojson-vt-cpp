@@ -90,10 +90,16 @@ private:
         if (!new_line.empty()) {
             if (lineMetrics) {
                 property_map newProps = props;
-                double clip_start = disableBufferForLineMetrics ? (line.segStartNoBuffer / line.dist) : (line.segStart / line.dist);
-                double clip_end = disableBufferForLineMetrics ? (line.segEndNoBuffer / line.dist) : (line.segEnd / line.dist);
-                std::cout<<"clip_start disableBuffer: "<<(line.segStartNoBuffer / line.dist)<<", original: "<<(line.segStart / line.dist)<<std::endl;
-                std::cout<<"clip_end disableBuffer: "<<(line.segEndNoBuffer / line.dist)<<", original: "<<(line.segEnd / line.dist)<<std::endl;
+                double clip_start = line.segStart / line.dist;
+                double clip_end = line.segEnd / line.dist;
+                if(disableBufferForLineMetrics) {
+                    clip_start = (line.segStartNoBuffer / line.dist);
+                    clip_end = (line.segEndNoBuffer / line.dist);
+                }
+                std::cout<<"internal tileID : "<<std::to_string(z)<<" "<<x<<" "<<y<<std::endl;
+                std::cout<<"with buffer clip_start: "<<line.segStart / line.dist<<", clip_end: "<<line.segEnd / line.dist<<std::endl;
+                std::cout<<"no buffer clip_start: "<<(line.segStartNoBuffer / line.dist)<<", clip_end: "<<(line.segEndNoBuffer / line.dist)<<std::endl;
+                std::cout.flush();
                 newProps.emplace(std::make_pair<std::string, value>("mapbox_clip_start",clip_start));
                 newProps.emplace(std::make_pair<std::string, value>("mapbox_clip_end", clip_end));
                 tile.features.emplace_back(std::move(new_line), std::move(newProps), id);
