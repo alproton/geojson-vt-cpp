@@ -177,12 +177,12 @@ private:
             }
             double k1border = noBuffer ? k1_metric : k1;
             double k2border = noBuffer ? k2_metric : k2;
-            assert (k1_metric > k1 && k1_metric < k2 && "invalid k1 metric");
-            assert(k2_metric > k1 && k2_metric < k2 && "invalid k2 metric");
+            assert (k1_metric >= k1 && k1_metric <= k2 && "invalid k1 metric");
+            assert(k2_metric >= k1 && k2_metric <= k2 && "invalid k2 metric");
             vt_line_string slice = newSlice(line);
 
             std::string noBufferStr = noBuffer ? "noBuffer : true" : "noBuffer : false";
-            ss<<"k1: "<<k1border<<", k2: "<<k2border<<", tileID: "<<std::to_string(z_)<<" "<<std::to_string(x_)<<" "<<std::to_string(y_)<<", quadrant: "<<clipQuadrantToString()<<", "<<noBufferStr<<std::endl;
+            ss<<"k1: "<<k1border<<", k2: "<<k2border<<", tileID: "<<std::to_string(z_)<<" "<<std::to_string(x_)<<" "<<std::to_string(y_)<<", quadrant: "<<clipQuadrantToString()<<", "<<noBufferStr<<", line dist: "<<line.dist<<std::endl;
             for (size_t i = 0; i < (len - 1); ++i) {
                 const auto& a = line[i];
                 const auto& b = line[i + 1];
@@ -198,14 +198,14 @@ private:
                         slice.emplace_back(intersect<I>(a, b, k1border, t));
                         if (lineMetrics) {
                             slice.segStart = lineLen + segLen * t;
-                            ss<<"ak < k1 && bk > k2, ---|-----|-->, t: "<<t<<", segStart: "<<slice.segStart<<", normalized: "<<slice.segStart/slice.dist<<std::endl;
+                            ss<<"ak < k1 && bk > k2, ---|-----|-->, t: "<<t<<", segStart: "<<slice.segStart<<", normalized: "<<slice.segStart/slice.dist<<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<<std::endl;
                         }
 
                         t = calc_progress<I>(a, b, k2border);
                         slice.emplace_back(intersect<I>(a, b, k2border, t));
                         if (lineMetrics) {
                             slice.segEnd = lineLen + segLen * t;
-                            ss <<"ak < k1 && bk > k2, ---|-----|-->, t: " << t << ", segEnd: " << slice.segEnd << ", normalized: "<<slice.segEnd/slice.dist <<" , slice added: "<<slices.size()+1<<std::endl;
+                            ss <<"ak < k1 && bk > k2, ---|-----|-->, t: " << t << ", segEnd: " << slice.segEnd << ", normalized: "<<slice.segEnd/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<<" , slice added: "<<slices.size()+1<<std::endl;
                         }
                         slices.emplace_back(std::move(slice));
 
@@ -216,14 +216,14 @@ private:
                         slice.emplace_back(intersect<I>(a, b, k1border, t));
                         if (lineMetrics) {
                             slice.segStart = lineLen + segLen * t;
-                            ss <<"ak < k1 && bk > k1, ---|-->  |, t: " << t << ", segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist << std::endl;
+                            ss <<"ak < k1 && bk > k1, ---|-->  |, t: " << t << ", segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< std::endl;
                         }
                         if (isLastSeg) slice.emplace_back(b); // last point
 
                     } else if (bk == k1border && !isLastSeg) { // --->|..  |
                         if (lineMetrics) {
                             slice.segStart = lineLen + segLen;
-                            ss <<"ak < k1 && bk == k1, --->|..  |, segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist << std::endl;
+                            ss <<"ak < k1 && bk == k1, --->|..  |, segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< std::endl;
                         }
                         slice.emplace_back(b);
                     }
@@ -233,14 +233,14 @@ private:
                         slice.emplace_back(intersect<I>(a, b, k2border, t));
                         if (lineMetrics) {
                             slice.segStart = lineLen + segLen * t;
-                            ss <<"ak > k2 && bk < k1, <--|-----|---, t: " << t << ", segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist << std::endl;
+                            ss <<"ak > k2 && bk < k1, <--|-----|---, t: " << t << ", segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< std::endl;
                         }
 
                         t = calc_progress<I>(a, b, k1border);
                         slice.emplace_back(intersect<I>(a, b, k1border, t));
                         if (lineMetrics) {
                             slice.segEnd = lineLen + segLen * t;
-                            ss <<"ak > k2 && bk < k1, <--|-----|---, t: " << t << ", segEnd: " << slice.segEnd <<", normalized: "<<slice.segEnd/slice.dist << " , slice added: "<<slices.size()+1 <<std::endl;
+                            ss <<"ak > k2 && bk < k1, <--|-----|---, t: " << t << ", segEnd: " << slice.segEnd <<", normalized: "<<slice.segEnd/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< " , slice added: "<<slices.size()+1 <<std::endl;
                         }
 
                         slices.emplace_back(std::move(slice));
@@ -252,21 +252,21 @@ private:
                         slice.emplace_back(intersect<I>(a, b, k2border, t));
                         if (lineMetrics) {
                             slice.segStart = lineLen + segLen * t;
-                            ss <<"ak > k2 && bk < k2, |  <--|---, t: " << t << ", segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist << std::endl;
+                            ss <<"ak > k2 && bk < k2, |  <--|---, t: " << t << ", segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< std::endl;
                         }
                         if (isLastSeg) slice.emplace_back(b); // last point
 
                     } else if (bk == k2border && !isLastSeg) { // |  ..|<---
                         if (lineMetrics) {
                             slice.segStart = lineLen + segLen;
-                            ss <<"ak > k2 && bk == k2, |  ..|<---, segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist << std::endl;
+                            ss <<"ak > k2 && bk == k2, |  ..|<---, segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< std::endl;
                         }
                         slice.emplace_back(b);
                     }
                 } else {
                     if (slice.empty() && lineMetrics) {
                         slice.segStart = lineLen;
-                        ss <<"ak >= k1 && bk <= k2, segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist <<" first line start" << std::endl;
+                        ss <<"ak >= k1 && bk <= k2, segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist <<" first line start" <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< std::endl;
                     }
                     slice.emplace_back(a);
 
@@ -275,7 +275,7 @@ private:
                         slice.emplace_back(intersect<I>(a, b, k1border, t));
                         if (lineMetrics) {
                             slice.segEnd = lineLen + segLen * t;
-                            ss <<"ak >= k1 && bk < k1, <--|---  |, t: " << t << ", segEnd: " << slice.segEnd <<", normalized: "<<slice.segEnd/slice.dist << " , slice added: "<<slices.size()+1<< std::endl;
+                            ss <<"ak >= k1 && bk < k1, <--|---  |, t: " << t << ", segEnd: " << slice.segEnd <<", normalized: "<<slice.segEnd/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< " , slice added: "<<slices.size()+1<< std::endl;
                         }
 
                         slices.emplace_back(std::move(slice));
@@ -286,7 +286,7 @@ private:
                         slice.emplace_back(intersect<I>(a, b, k2border, t));
                         if (lineMetrics) {
                             slice.segEnd = lineLen + segLen * t;
-                            ss <<"ak >= k1 && bk > k2, |  ---|-->, t: " << t << ", segEnd: " << slice.segEnd <<", normalized: "<<slice.segEnd/slice.dist << " , slice added: "<<slices.size()+1<< std::endl;
+                            ss <<"ak >= k1 && bk > k2, |  ---|-->, t: " << t << ", segEnd: " << slice.segEnd <<", normalized: "<<slice.segEnd/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< " , slice added: "<<slices.size()+1<< std::endl;
                         }
                         slices.emplace_back(std::move(slice));
                         slice = newSlice(line);
@@ -304,11 +304,10 @@ private:
             if (!slice.empty()) { // add the final slice
                 if (lineMetrics) {
                     slice.segEnd = lineLen;
-                    ss <<"last slice segEnd: " << slice.segEnd << ", normalized: "<<slice.segEnd/slice.dist <<" , slice added: "<<slices.size()+1<< std::endl;
+                    ss <<"last slice segEnd: " << slice.segEnd << ", normalized: "<<slice.segEnd/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<" , slice added: "<<slices.size()+1<< std::endl;
                 }
                 slices.emplace_back(std::move(slice));
             }
-            std::cout<<ss.str()<<std::endl;
         };
 
         std::stringstream ss;
