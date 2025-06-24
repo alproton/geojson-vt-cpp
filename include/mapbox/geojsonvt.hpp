@@ -198,12 +198,11 @@ private:
             auto it = bufferless_tiles.find(id);
 
             if (it == bufferless_tiles.end()) {
-
                 it = bufferless_tiles.emplace(id, detail::InternalTile{ features, z, x, y, options.extent, tolerance, options.lineMetrics}).first;
-                tile = &it->second;
                 stats[z] = (stats.count(z) ? stats[z] + 1 : 1);
                 total++;
             }
+            tile = &it->second;
 
         } else {
             auto it = tiles.find(id);
@@ -211,17 +210,16 @@ private:
             if (it == tiles.end()) {
                 //check if there exists a bufferless tile for this id
                 it = tiles.emplace(id, detail::InternalTile{ features, z, x, y, options.extent, tolerance, options.lineMetrics }).first;
-                tile = &it->second;
+
                 if(bufferless_tiles.find(id) != bufferless_tiles.end()) {
                     //TODO: FIX ME
                     // tile->updateBufferLessClips(features, bufferless_tiles[id].source_features);
                 }
-
-
                 stats[z] = (stats.count(z) ? stats[z] + 1 : 1);
                 total++;
                 // printf("tile z%i-%i-%i\n", z, x, y);
             }
+            tile = &it->second;
         }
 
         if (features.empty())
