@@ -9,6 +9,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <iostream>
 #include <map>
 #include <unordered_map>
 
@@ -212,6 +213,26 @@ private:
                 it = tiles.emplace(id, detail::InternalTile{ features, z, x, y, options.extent, tolerance, options.lineMetrics }).first;
 
                 if(bufferless_tiles.find(id) != bufferless_tiles.end()) {
+                    const auto& bufferless_tile = bufferless_tiles.at(id);
+                    for(const auto& feature : bufferless_tile.source_features) {
+                        const auto& geom = feature.geometry;
+                        if (geom.is<detail::vt_line_string>()) {
+                            //if geom is vt_line_string, we need to get values from it
+                            const auto& line = geom.get<detail::vt_line_string>();
+                            double clipStart = line.segStart / line.dist;
+                            double clipEnd = line.segEnd / line.dist;
+                            std::cout<<"clipStart/End: "<<clipStart<<" "<<clipEnd<<std::endl;
+                        } else if(geom.is<detail::vt_multi_line_string>()) {
+                            //if geom is vt_multi_line_string, we need to get values from each line
+                            const auto& lines = geom.get<detail::vt_multi_line_string>();
+                            std::cout<<"multi_line"<<std::endl;
+                            for(const auto& line : lines) {
+                                double clipStart = line.segStart / line.dist;
+                                double clipEnd = line.segEnd / line.dist;
+                                std::cout<<"clipStart/End: "<<clipStart<<" "<<clipEnd<<std::endl;
+                            }
+                        }
+                    }
                     //TODO: FIX ME
                     // tile->updateBufferLessClips(features, bufferless_tiles[id].source_features);
                 }
