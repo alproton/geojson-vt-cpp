@@ -213,7 +213,8 @@ private:
                 it = tiles.emplace(id, detail::InternalTile{ features, z, x, y, options.extent, tolerance, options.lineMetrics }).first;
                 tile = &it->second;
                 if(bufferless_tiles.find(id) != bufferless_tiles.end()) {
-                    tile->updateBufferLessClips(features, bufferless_tiles[id].source_features);
+                    //TODO: FIX ME
+                    // tile->updateBufferLessClips(features, bufferless_tiles[id].source_features);
                 }
 
 
