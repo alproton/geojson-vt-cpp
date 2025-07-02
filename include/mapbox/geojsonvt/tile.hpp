@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <mapbox/geojsonvt/types.hpp>
 
 namespace mapbox {
@@ -26,6 +27,7 @@ public:
     const double tolerance;
     const double sq_tolerance;
     const bool lineMetrics;
+    const bool disableBufferForLineMetrics = false;
 
     vt_features source_features;
     mapbox::geometry::box<double> bbox = { { 2, 1 }, { -1, 0 } };
@@ -38,7 +40,8 @@ public:
                  const uint32_t y_,
                  const uint16_t extent_,
                  const double tolerance_,
-                 const bool lineMetrics_)
+                 const bool lineMetrics_,
+                 const bool disableBuffForLineMetrics = false)
         : extent(extent_),
           z(z_),
           x(x_),
@@ -46,6 +49,7 @@ public:
           z2(std::pow(2, z)),
           tolerance(tolerance_),
           sq_tolerance(tolerance_ * tolerance_),
+          disableBufferForLineMetrics(disableBuffForLineMetrics),
           lineMetrics(lineMetrics_) {
 
         tile.features.reserve(source.size());
@@ -86,8 +90,18 @@ private:
         if (!new_line.empty()) {
             if (lineMetrics) {
                 property_map newProps = props;
-                newProps.emplace(std::make_pair<std::string, value>("mapbox_clip_start", line.segStart / line.dist));
-                newProps.emplace(std::make_pair<std::string, value>("mapbox_clip_end", line.segEnd / line.dist));
+                double clip_start = line.segStart / line.dist;
+                double clip_end = line.segEnd / line.dist;
+                if(disableBufferForLineMetrics) {
+                    clip_start = (line.segStartNoBuffer / line.dist);
+                    clip_end = (line.segEndNoBuffer / line.dist);
+                }
+                std::cout<<"internal tileID : "<<std::to_string(z)<<" "<<x<<" "<<y<<std::endl;
+                std::cout<<"with buffer clip_start: "<<line.segStart / line.dist<<", clip_end: "<<line.segEnd / line.dist<<std::endl;
+                std::cout<<"no buffer clip_start: "<<(line.segStartNoBuffer / line.dist)<<", clip_end: "<<(line.segEndNoBuffer / line.dist)<<std::endl;
+                std::cout.flush();
+                newProps.emplace(std::make_pair<std::string, value>("mapbox_clip_start",clip_start));
+                newProps.emplace(std::make_pair<std::string, value>("mapbox_clip_end", clip_end));
                 tile.features.emplace_back(std::move(new_line), std::move(newProps), id);
             } else
                 tile.features.emplace_back(std::move(new_line), props, id);

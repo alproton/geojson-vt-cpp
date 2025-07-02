@@ -1,20 +1,80 @@
 #pragma once
 
+#include <float.h>
 #include <mapbox/geojsonvt/types.hpp>
 
 namespace mapbox {
 namespace geojsonvt {
 namespace detail {
 
+enum ClipQuadrant {
+    cqLeftTop,
+    cqLeftBottom,
+    cqRightBototm,
+    cqRightTop,
+    cqLeft,
+    cqRight,
+    cqInvalid
+};
+
+
+
 template <uint8_t I>
 class clipper {
 public:
     clipper(double k1_, double k2_, bool lineMetrics_ = false)
-        : k1(k1_), k2(k2_), lineMetrics(lineMetrics_) {}
+        : k1(k1_), k2(k2_), k1_metric(k1_), k2_metric(k2_), lineMetrics(lineMetrics_), z_(0), x_(0), y_(0) {}
+
+    clipper(double k1_geom, double k2_geom, double k1_m, double k2_m, bool lineMetrics_ = false)
+    : k1(k1_geom), k2(k2_geom), k1_metric(k1_m), k2_metric(k2_m), lineMetrics(lineMetrics_), z_(0), x_(0), y_(0) {}
+
+    clipper(double k1_geom, double k2_geom, double k1_m, double k2_m, uint8_t z, uint32_t x, uint32_t y, bool noBuffLineMetrics = false, bool lineMetrics_ = false, ClipQuadrant cq = ClipQuadrant::cqInvalid)
+    : k1(k1_geom), k2(k2_geom), k1_metric(k1_m), k2_metric(k2_m), noBufferLineMetrics(noBuffLineMetrics), lineMetrics(lineMetrics_), z_(z), x_(x), y_(y), quadrant_(cq) {}
 
     const double k1;
     const double k2;
+    const double k1_metric;
+    const double k2_metric;
     const bool lineMetrics;
+    const bool noBufferLineMetrics = false;
+    const uint8_t z_;
+    uint32_t x_, y_;
+    ClipQuadrant quadrant_ = ClipQuadrant::cqInvalid;
+
+    std::string clipQuadrantToString() const {
+        std::string result = "cqUnset";
+        switch(quadrant_) {
+        case ClipQuadrant::cqInvalid:
+            result = "cqInvalid";
+            break;
+
+        case ClipQuadrant::cqLeft:
+            result = "cqLeft";
+            break;
+
+        case ClipQuadrant::cqRight:
+            result = "cqRight";
+            break;
+
+        case ClipQuadrant::cqLeftTop:
+            result = "cqLeftTop";
+            break;
+
+        case ClipQuadrant::cqLeftBottom:
+            result = "cqLeftBottom";
+            break;
+
+        case ClipQuadrant::cqRightBototm:
+            result = "cqRightBototm";
+            break;
+
+        case ClipQuadrant::cqRightTop:
+            result = "cqRightTop";
+            break;
+        }
+
+        return result;
+    }
 
     vt_geometry operator()(const vt_empty& empty) const {
         return empty;
@@ -95,106 +155,183 @@ private:
         if (lineMetrics) {
             slice.segStart = line.segStart;
             slice.segEnd = line.segEnd;
+
+            slice.segStartNoBuffer = line.segStart;
+            slice.segEndNoBuffer = line.segEnd;
         }
         return slice;
     }
 
     void clipLine(const vt_line_string& line, vt_multi_line_string& slices) const {
-        const size_t len = line.size();
-        double lineLen = line.segStart;
-        double segLen = 0.0;
-        double t = 0.0;
 
-        if (len < 2)
-            return;
+        const auto& clipLineInner = [&](const vt_line_string& line, vt_multi_line_string& slices, bool noBuffer, std::stringstream& ss) {
+            const size_t len = line.size();
+            double lineLen = line.segStart;
+            double segLen = 0.0;
+            double t = 0.0;
 
-        vt_line_string slice = newSlice(line);
+            if (len < 2)
+                return;
+            if(z_ == 17 && x_ == 21139 && y_ == 50781 && quadrant_ == ClipQuadrant::cqLeftTop) {
+                std::cout<<"break here"<<std::endl;
+            }
+            double k1border = noBuffer ? k1_metric : k1;
+            double k2border = noBuffer ? k2_metric : k2;
+            assert (k1_metric >= k1 && k1_metric <= k2 && "invalid k1 metric");
+            assert(k2_metric >= k1 && k2_metric <= k2 && "invalid k2 metric");
+            vt_line_string slice = newSlice(line);
 
-        for (size_t i = 0; i < (len - 1); ++i) {
-            const auto& a = line[i];
-            const auto& b = line[i + 1];
-            const double ak = get<I>(a);
-            const double bk = get<I>(b);
-            const bool isLastSeg = (i == (len - 2));
+            std::string noBufferStr = noBuffer ? "noBuffer : true" : "noBuffer : false";
+            ss<<"k1: "<<k1border<<", k2: "<<k2border<<", tileID: "<<std::to_string(z_)<<" "<<std::to_string(x_)<<" "<<std::to_string(y_)<<", quadrant: "<<clipQuadrantToString()<<", "<<noBufferStr<<", line dist: "<<line.dist<<std::endl;
+            for (size_t i = 0; i < (len - 1); ++i) {
+                const auto& a = line[i];
+                const auto& b = line[i + 1];
+                const double ak = get<I>(a);
+                const double bk = get<I>(b);
+                const bool isLastSeg = (i == (len - 2));
 
-            if (lineMetrics) segLen = ::hypot((b.x - a.x), (b.y - a.y));
+                if (lineMetrics) segLen = ::hypot((b.x - a.x), (b.y - a.y));
 
-            if (ak < k1) {
-                if (bk > k2) { // ---|-----|-->
-                    t = calc_progress<I>(a, b, k1);
-                    slice.emplace_back(intersect<I>(a, b, k1, t));
-                    if (lineMetrics) slice.segStart = lineLen + segLen * t;
+                if (ak < k1border) {
+                    if (bk > k2border) { // ---|-----|-->
+                        t = calc_progress<I>(a, b, k1border);
+                        slice.emplace_back(intersect<I>(a, b, k1border, t));
+                        if (lineMetrics) {
+                            slice.segStart = lineLen + segLen * t;
+                            ss<<"ak < k1 && bk > k2, ---|-----|-->, t: "<<t<<", segStart: "<<slice.segStart<<", normalized: "<<slice.segStart/slice.dist<<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<<std::endl;
+                        }
 
-                    t = calc_progress<I>(a, b, k2);
-                    slice.emplace_back(intersect<I>(a, b, k2, t));
-                    if (lineMetrics) slice.segEnd = lineLen + segLen * t;
-                    slices.emplace_back(std::move(slice));
+                        t = calc_progress<I>(a, b, k2border);
+                        slice.emplace_back(intersect<I>(a, b, k2border, t));
+                        if (lineMetrics) {
+                            slice.segEnd = lineLen + segLen * t;
+                            ss <<"ak < k1 && bk > k2, ---|-----|-->, t: " << t << ", segEnd: " << slice.segEnd << ", normalized: "<<slice.segEnd/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<<" , slice added: "<<slices.size()+1<<std::endl;
+                        }
+                        slices.emplace_back(std::move(slice));
 
-                    slice = newSlice(line);
+                        slice = newSlice(line);
 
-                } else if (bk > k1) { // ---|-->  |
-                    t = calc_progress<I>(a, b, k1);
-                    slice.emplace_back(intersect<I>(a, b, k1, t));
-                    if (lineMetrics) slice.segStart = lineLen + segLen * t;
-                    if (isLastSeg) slice.emplace_back(b); // last point
+                    } else if (bk > k1border) { // ---|-->  |
+                        t = calc_progress<I>(a, b, k1border);
+                        slice.emplace_back(intersect<I>(a, b, k1border, t));
+                        if (lineMetrics) {
+                            slice.segStart = lineLen + segLen * t;
+                            ss <<"ak < k1 && bk > k1, ---|-->  |, t: " << t << ", segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< std::endl;
+                        }
+                        if (isLastSeg) slice.emplace_back(b); // last point
 
-                } else if (bk == k1 && !isLastSeg) { // --->|..  |
-                    if (lineMetrics) slice.segStart = lineLen + segLen;
-                    slice.emplace_back(b);
+                    } else if (bk == k1border && !isLastSeg) { // --->|..  |
+                        if (lineMetrics) {
+                            slice.segStart = lineLen + segLen;
+                            ss <<"ak < k1 && bk == k1, --->|..  |, segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< std::endl;
+                        }
+                        slice.emplace_back(b);
+                    }
+                } else if (ak > k2border) {
+                    if (bk < k1border) { // <--|-----|---
+                        t = calc_progress<I>(a, b, k2border);
+                        slice.emplace_back(intersect<I>(a, b, k2border, t));
+                        if (lineMetrics) {
+                            slice.segStart = lineLen + segLen * t;
+                            ss <<"ak > k2 && bk < k1, <--|-----|---, t: " << t << ", segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< std::endl;
+                        }
+
+                        t = calc_progress<I>(a, b, k1border);
+                        slice.emplace_back(intersect<I>(a, b, k1border, t));
+                        if (lineMetrics) {
+                            slice.segEnd = lineLen + segLen * t;
+                            ss <<"ak > k2 && bk < k1, <--|-----|---, t: " << t << ", segEnd: " << slice.segEnd <<", normalized: "<<slice.segEnd/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< " , slice added: "<<slices.size()+1 <<std::endl;
+                        }
+
+                        slices.emplace_back(std::move(slice));
+
+                        slice = newSlice(line);
+
+                    } else if (bk < k2border) { // |  <--|---
+                        t = calc_progress<I>(a, b, k2border);
+                        slice.emplace_back(intersect<I>(a, b, k2border, t));
+                        if (lineMetrics) {
+                            slice.segStart = lineLen + segLen * t;
+                            ss <<"ak > k2 && bk < k2, |  <--|---, t: " << t << ", segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< std::endl;
+                        }
+                        if (isLastSeg) slice.emplace_back(b); // last point
+
+                    } else if (bk == k2border && !isLastSeg) { // |  ..|<---
+                        if (lineMetrics) {
+                            slice.segStart = lineLen + segLen;
+                            ss <<"ak > k2 && bk == k2, |  ..|<---, segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< std::endl;
+                        }
+                        slice.emplace_back(b);
+                    }
+                } else {
+                    if (slice.empty() && lineMetrics) {
+                        slice.segStart = lineLen;
+                        ss <<"ak >= k1 && bk <= k2, segStart: " << slice.segStart<<", normalized: "<<slice.segStart/slice.dist <<" first line start" <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< std::endl;
+                    }
+                    slice.emplace_back(a);
+
+                    if (bk < k1border) { // <--|---  |
+                        t = calc_progress<I>(a, b, k1border);
+                        slice.emplace_back(intersect<I>(a, b, k1border, t));
+                        if (lineMetrics) {
+                            slice.segEnd = lineLen + segLen * t;
+                            ss <<"ak >= k1 && bk < k1, <--|---  |, t: " << t << ", segEnd: " << slice.segEnd <<", normalized: "<<slice.segEnd/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< " , slice added: "<<slices.size()+1<< std::endl;
+                        }
+
+                        slices.emplace_back(std::move(slice));
+                        slice = newSlice(line);
+
+                    } else if (bk > k2border) { // |  ---|-->
+                        t = calc_progress<I>(a, b, k2border);
+                        slice.emplace_back(intersect<I>(a, b, k2border, t));
+                        if (lineMetrics) {
+                            slice.segEnd = lineLen + segLen * t;
+                            ss <<"ak >= k1 && bk > k2, |  ---|-->, t: " << t << ", segEnd: " << slice.segEnd <<", normalized: "<<slice.segEnd/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<", i: "<<i<< " , slice added: "<<slices.size()+1<< std::endl;
+                        }
+                        slices.emplace_back(std::move(slice));
+                        slice = newSlice(line);
+
+                    } else if (isLastSeg) { // | --> |
+                        slice.emplace_back(b);
+                    }
                 }
-            } else if (ak > k2) {
-                if (bk < k1) { // <--|-----|---
-                    t = calc_progress<I>(a, b, k2);
-                    slice.emplace_back(intersect<I>(a, b, k2, t));
-                    if (lineMetrics) slice.segStart = lineLen + segLen * t;
 
-                    t = calc_progress<I>(a, b, k1);
-                    slice.emplace_back(intersect<I>(a, b, k1, t));
-                    if (lineMetrics) slice.segEnd = lineLen + segLen * t;
-
-                    slices.emplace_back(std::move(slice));
-
-                    slice = newSlice(line);
-
-                } else if (bk < k2) { // |  <--|---
-                    t = calc_progress<I>(a, b, k2);
-                    slice.emplace_back(intersect<I>(a, b, k2, t));
-                    if (lineMetrics) slice.segStart = lineLen + segLen * t;
-                    if (isLastSeg) slice.emplace_back(b); // last point
-
-                } else if (bk == k2 && !isLastSeg) { // |  ..|<---
-                    if (lineMetrics) slice.segStart = lineLen + segLen;
-                    slice.emplace_back(b);
-                }
-            } else {
-                slice.emplace_back(a);
-
-                if (bk < k1) { // <--|---  |
-                    t = calc_progress<I>(a, b, k1);
-                    slice.emplace_back(intersect<I>(a, b, k1, t));
-                    if (lineMetrics) slice.segEnd = lineLen + segLen * t;
-                    slices.emplace_back(std::move(slice));
-                    slice = newSlice(line);
-
-                } else if (bk > k2) { // |  ---|-->
-                    t = calc_progress<I>(a, b, k2);
-                    slice.emplace_back(intersect<I>(a, b, k2, t));
-                    if (lineMetrics) slice.segEnd = lineLen + segLen * t;
-                    slices.emplace_back(std::move(slice));
-                    slice = newSlice(line);
-
-                } else if (isLastSeg) { // | --> |
-                    slice.emplace_back(b);
+                if (lineMetrics) {
+                    lineLen += segLen;
                 }
             }
 
-            if (lineMetrics) lineLen += segLen;
-        }
+            if (!slice.empty()) { // add the final slice
+                if (lineMetrics) {
+                    slice.segEnd = lineLen;
+                    ss <<"last slice segEnd: " << slice.segEnd << ", normalized: "<<slice.segEnd/slice.dist <<" , linelen: "<<lineLen<<" , seglen: "<<segLen<<" , slice added: "<<slices.size()+1<< std::endl;
+                }
+                slices.emplace_back(std::move(slice));
+            }
+        };
 
-        if (!slice.empty()) { // add the final slice
-            if (lineMetrics) slice.segEnd = lineLen;
-            slices.emplace_back(std::move(slice));
+        std::stringstream ss;
+        ss.precision(10);
+        ss.setf(std::ios::fixed);
+
+
+        ss<<"\n-------- Buffered clipLine --------"<<std::endl;
+        clipLineInner(line, slices, false, ss);
+        if(noBufferLineMetrics) {
+            vt_multi_line_string noBuffSlices;
+
+            ss<<"-------- No Buffered clipLine --------"<<std::endl;
+            clipLineInner(line, noBuffSlices, noBufferLineMetrics, ss);
+            ss<<"noBuffSlices: "<<noBuffSlices.size()<<", buffSlices: "<<slices.size()<<std::endl;
+            if(!slices.empty()) {
+                for(size_t i = 0; i < noBuffSlices.size(); ++i) {
+                    slices[i].segStartNoBuffer = noBuffSlices[i].segStart;
+                    slices[i].segEndNoBuffer = noBuffSlices[i].segEnd;
+                }
+            }
         }
+        ss<<"-------------------------------------"<<std::endl;
+        std::cout<<ss.str()<<std::endl;
     }
 
     vt_linear_ring clipRing(const vt_linear_ring& ring) const {
@@ -261,60 +398,80 @@ private:
  *     |        |
  */
 
-template <uint8_t I>
-inline vt_features clip(const vt_features& features,
-                        const double k1,
-                        const double k2,
-                        const double minAll,
-                        const double maxAll,
-                        const bool lineMetrics) {
+    template <uint8_t I>
+    inline vt_features clip(const vt_features& features,
+                            const double k1_geom,
+                            const double k2_geom,
+                            const double k1_metric,
+                            const double k2_metric,
+                            const double minAll,
+                            const double maxAll,
+                            const bool noBufferLineMetrics,
+                            const bool lineMetrics,
+                            ClipQuadrant quadrant,
+                            const uint8_t z,
+                            const uint32_t x,
+                            const uint32_t y) {
+        // Trivial accept for the entire feature set is only safe if lineMetrics are disabled.
+        if (/*!lineMetrics &&*/ minAll >= k1_geom && maxAll < k2_geom)
+            return features;
 
-    if (minAll >= k1 && maxAll < k2) // trivial accept
-        return features;
+        if (maxAll < k1_geom || minAll >= k2_geom)
+            return {};
 
-    if (maxAll < k1 || minAll >= k2) // trivial reject
-        return {};
+        vt_features clipped;
+        clipped.reserve(features.size());
 
-    vt_features clipped;
-    clipped.reserve(features.size());
+        for (const auto& feature : features) {
+            const auto& geom = feature.geometry;
+            assert(feature.properties);
+            const auto& props = feature.properties;
+            const auto& id = feature.id;
 
-    for (const auto& feature : features) {
-        const auto& geom = feature.geometry;
-        assert(feature.properties);
-        const auto& props = feature.properties;
-        const auto& id = feature.id;
+            const double min = get<I>(feature.bbox.min);
+            const double max = get<I>(feature.bbox.max);
 
-        const double min = get<I>(feature.bbox.min);
-        const double max = get<I>(feature.bbox.max);
+            // Trivial accept for a single feature is also only safe if lineMetrics are disabled.
+            if (/*!lineMetrics &&*/ min >= k1_geom && max < k2_geom) {
+                clipped.emplace_back(feature);
 
-        if (min >= k1 && max < k2) { // trivial accept
-            clipped.emplace_back(feature);
+            } else if (max < k1_geom || min >= k2_geom) { // Trivial reject is always safe.
+                continue;
 
-        } else if (max < k1 || min >= k2) { // trivial reject
-            continue;
+            } else { // Perform a detailed clip.
+                const auto& clippedGeom = vt_geometry::visit(geom, clipper<I>{ k1_geom, k2_geom, k1_metric, k2_metric, z, x, y, noBufferLineMetrics, lineMetrics , quadrant});
 
-        } else {
-            const auto& clippedGeom = vt_geometry::visit(geom, clipper<I>{ k1, k2, lineMetrics });
-
-            clippedGeom.match(
-                [&](const auto&) {
-                    clipped.emplace_back(clippedGeom, props, id);
-                },
-                [&](const vt_multi_line_string& result) {
-                    if (lineMetrics) {
-                        for (const auto& segment : result) {
-                            clipped.emplace_back(segment, props, id);
-                        }
-                    } else {
+                clippedGeom.match(
+                    [&](const auto&) {
                         clipped.emplace_back(clippedGeom, props, id);
+                    },
+                    [&](const vt_multi_line_string& result) {
+                        if (lineMetrics) {
+                            for (const auto& segment : result) {
+                                clipped.emplace_back(segment, props, id);
+                            }
+                        } else {
+                            clipped.emplace_back(clippedGeom, props, id);
+                        }
                     }
-                }
-            );
+                );
+            }
         }
+        return clipped;
     }
 
-    return clipped;
-}
+
+    // Existing clip function (now calls the new one for backward compatibility)
+    template <uint8_t I>
+    inline vt_features clip(const vt_features& features,
+                            const double k1,
+                            const double k2,
+                            const double minAll,
+                            const double maxAll,
+                            const bool lineMetrics) {
+        // Pass 'k1' and 'k2' as both the geometry and metric boundaries
+        return clip<I>(features, k1, k2, k1, k2, minAll, maxAll, false, lineMetrics, ClipQuadrant::cqInvalid, 0, 0, 0);
+    }
 
 } // namespace detail
 } // namespace geojsonvt
