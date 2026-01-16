@@ -9,6 +9,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <iostream>
 #include <map>
 #include <unordered_map>
 
@@ -59,6 +60,9 @@ struct Options : TileOptions {
 
     // whether to generate feature ids, overriding existing ids  
     bool generateId = false;
+
+    // whether to disable buffer padding for line metrics, so that clip_start and clip_end are consecutive.
+    bool disableBufferForLineMetrics = false;
 };
 
 const Tile empty_tile{};
@@ -155,6 +159,7 @@ public:
 
 private:
     std::unordered_map<uint64_t, detail::InternalTile> tiles;
+    std::unordered_map<uint64_t, detail::InternalTile> bufferless_tiles;
 
     std::unordered_map<uint64_t, detail::InternalTile>::iterator
     findParent(const uint8_t z, const uint32_t x, const uint32_t y) {
@@ -181,27 +186,62 @@ private:
                    const uint32_t y,
                    const uint8_t cz = 0,
                    const uint32_t cx = 0,
-                   const uint32_t cy = 0) {
+                   const uint32_t cy = 0,
+                   bool bufferless = false) {
 
         const double z2 = 1u << z;
         const uint64_t id = toID(z, x, y);
+        const double tolerance = (z == options.maxZoom ? 0 : options.tolerance / (z2 * options.extent));
 
-        auto it = tiles.find(id);
+        detail::InternalTile* tile = nullptr;
+        if(bufferless) {
+            //store temporary non buffered tiles in a separate map. we only need them created for consecutive clip_start and clip_end
+            auto it = bufferless_tiles.find(id);
 
-        if (it == tiles.end()) {
-            const double tolerance =
-                (z == options.maxZoom ? 0 : options.tolerance / (z2 * options.extent));
+            if (it == bufferless_tiles.end()) {
+                it = bufferless_tiles.emplace(id, detail::InternalTile{ features, z, x, y, options.extent, tolerance, options.lineMetrics}).first;
+                stats[z] = (stats.count(z) ? stats[z] + 1 : 1);
+                total++;
+            }
+            tile = &it->second;
 
-            it = tiles
-                     .emplace(id,
-                              detail::InternalTile{ features, z, x, y, options.extent, tolerance, options.lineMetrics })
-                     .first;
-            stats[z] = (stats.count(z) ? stats[z] + 1 : 1);
-            total++;
-            // printf("tile z%i-%i-%i\n", z, x, y);
+        } else {
+            auto it = tiles.find(id);
+
+            if (it == tiles.end()) {
+                //check if there exists a bufferless tile for this id
+                it = tiles.emplace(id, detail::InternalTile{ features, z, x, y, options.extent, tolerance, options.lineMetrics }).first;
+
+                if(bufferless_tiles.find(id) != bufferless_tiles.end()) {
+                    const auto& bufferless_tile = bufferless_tiles.at(id);
+                    for(const auto& feature : bufferless_tile.source_features) {
+                        const auto& geom = feature.geometry;
+                        if (geom.is<detail::vt_line_string>()) {
+                            //if geom is vt_line_string, we need to get values from it
+                            const auto& line = geom.get<detail::vt_line_string>();
+                            double clipStart = line.segStart / line.dist;
+                            double clipEnd = line.segEnd / line.dist;
+                            std::cout<<"clipStart/End: "<<clipStart<<" "<<clipEnd<<std::endl;
+                        } else if(geom.is<detail::vt_multi_line_string>()) {
+                            //if geom is vt_multi_line_string, we need to get values from each line
+                            const auto& lines = geom.get<detail::vt_multi_line_string>();
+                            std::cout<<"multi_line"<<std::endl;
+                            for(const auto& line : lines) {
+                                double clipStart = line.segStart / line.dist;
+                                double clipEnd = line.segEnd / line.dist;
+                                std::cout<<"clipStart/End: "<<clipStart<<" "<<clipEnd<<std::endl;
+                            }
+                        }
+                    }
+                    //TODO: FIX ME
+                    // tile->updateBufferLessClips(features, bufferless_tiles[id].source_features);
+                }
+                stats[z] = (stats.count(z) ? stats[z] + 1 : 1);
+                total++;
+                // printf("tile z%i-%i-%i\n", z, x, y);
+            }
+            tile = &it->second;
         }
-
-        auto& tile = it->second;
 
         if (features.empty())
             return;
@@ -209,8 +249,8 @@ private:
         // if it's the first-pass tiling
         if (cz == 0u) {
             // stop tiling if we reached max zoom, or if the tile is too simple
-            if (z == options.indexMaxZoom || tile.tile.num_points <= options.indexMaxPoints) {
-                tile.source_features = features;
+            if (z == options.indexMaxZoom || tile->tile.num_points <= options.indexMaxPoints) {
+                tile->source_features = features;
                 return;
             }
 
@@ -221,7 +261,7 @@ private:
 
             // stop tiling if it's our target tile zoom
             if (z == cz) {
-                tile.source_features = features;
+                tile->source_features = features;
                 return;
             }
 
@@ -229,14 +269,33 @@ private:
             const double m = 1u << (cz - z);
             if (x != static_cast<uint32_t>(std::floor(cx / m)) ||
                 y != static_cast<uint32_t>(std::floor(cy / m))) {
-                tile.source_features = features;
+                tile->source_features = features;
                 return;
             }
         }
 
         const double p = 0.5 * options.buffer / options.extent;
-        const auto& min = tile.bbox.min;
-        const auto& max = tile.bbox.max;
+        const auto& min = tile->bbox.min;
+        const auto& max = tile->bbox.max;
+
+        //first create non buffered tiles for line metrics
+        if(options.disableBufferForLineMetrics) {
+            bool buffer_less_tiles = true;
+            const auto left = detail::clip<0>(features, x / z2, (x + 0.5) / z2, min.x, max.x, options.lineMetrics);
+
+            splitTile(detail::clip<1>(left, y / z2, (y + 0.5) / z2, min.y, max.y, options.lineMetrics), z + 1,
+                      x * 2, y * 2, cz, cx, cy, buffer_less_tiles);
+            splitTile(detail::clip<1>(left, (y + 0.5) / z2, (y + 1) / z2, min.y, max.y, options.lineMetrics), z + 1,
+                      x * 2, y * 2 + 1, cz, cx, cy, buffer_less_tiles);
+
+            const auto right =
+                detail::clip<0>(features, (x + 0.5) / z2, (x + 1) / z2, min.x, max.x, options.lineMetrics);
+
+            splitTile(detail::clip<1>(right, y / z2, (y + 0.5) / z2, min.y, max.y, options.lineMetrics), z + 1,
+                      x * 2 + 1, y * 2, cz, cx, cy, buffer_less_tiles);
+            splitTile(detail::clip<1>(right, (y + 0.5) / z2, (y + 1) / z2, min.y, max.y, options.lineMetrics), z + 1,
+                      x * 2 + 1, y * 2 + 1, cz, cx, cy, buffer_less_tiles);
+        }
 
         const auto left = detail::clip<0>(features, (x - p) / z2, (x + 0.5 + p) / z2, min.x, max.x, options.lineMetrics);
 
@@ -254,7 +313,7 @@ private:
                   x * 2 + 1, y * 2 + 1, cz, cx, cy);
 
         // if we sliced further down, no need to keep source geometry
-        tile.source_features = {};
+        tile->source_features = {};
     }
 };
 

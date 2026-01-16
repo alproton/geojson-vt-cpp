@@ -69,6 +69,39 @@ public:
         }
     }
 
+    // void updateBufferLessClips(vt_features& source, const vt_features& bufferless_features) {
+    //     assert(source.size() == bufferless_features.size());
+    //     for (size_t i = 0; i < source.size(); ++i) {
+    //         vt_feature& src_feature = source[i];
+    //         const vt_feature& bufferless_feature = bufferless_features[i];
+    //         const vt_geometry bufferless_geom = bufferless_feature.geometry;
+    //         assert(src_feature.properties);
+    //         const vt_geometry& geom = src_feature.geometry;
+    //         const auto& id = src_feature.id;
+    //         auto& props = src_feature.properties;
+    //
+    //
+    //         //     vt_geometry::visit(bufferless_geom, [&](const auto& g) {
+    //         //
+    //         //         // g.match(
+    //         //         //     [&](const vt_line_string& bufferless_line) {
+    //         //         //         // if (bufferless_geom.is<vt_line_string>()) {
+    //         //         //             // const vt_line_string& bufferless_line = bufferless_geom.get<vt_line_string>();
+    //         //         //             double clipStart = bufferless_line.segStart/bufferless_line.dist;
+    //         //         //             double clipEnd = bufferless_line.segEnd/bufferless_line.dist;
+    //         //         //             property_map newProps = *src_feature.properties;
+    //         //         //             newProps.emplace(std::make_pair<std::string, value>("mapbox_clip_start", clipStart));
+    //         //         //             newProps.emplace(std::make_pair<std::string, value>("mapbox_clip_end", clipEnd));
+    //         //         //
+    //         //         //             //TODO: need to update feature with the new clip start and end values. How to do this??
+    //         //         //             // src_feature.properties["mapbox_clip_start"] = clipStart;
+    //         //         //         // }
+    //         //         //     });
+    //         //     });
+    //     }
+    // }
+
+
 private:
     void addFeature(const vt_empty& empty, const property_map& props, const identifier& id) {
         tile.features.emplace_back(transform(empty), props, id);
